@@ -2,9 +2,9 @@ from jira import JIRA
 import argparse
 import keyring
 
-username = "HGUSYB"
+username = ""
 password = keyring.get_password("jira-api", username)
-server = "https://jira.scania.com"
+server = ""
 project = ""
 label = ""
 jira = JIRA(server=(server), basic_auth=(username, password))
