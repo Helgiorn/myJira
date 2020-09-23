@@ -1,41 +1,85 @@
-from jira import JIRA
-import argparse
+import click
 import keyring
+import getpass
+import json
+from JIRA import jira
 
-username = ""
-password = keyring.get_password("jira-api", username)
-server = ""
-project = ""
-label = ""
-jira = JIRA(server=(server), basic_auth=(username, password))
 
-#### ARGS
-parser = argparse.ArgumentParser(description='SWSU OCELOT Ticket Creator.')
-parser.add_argument("--title", type=str, help="Title for JIRA ticket.")
-parser.add_argument("--description", type=str, help="Description field for JIRA Ticket, required.")
-parser.add_argument("--type", default="Task", type=str, help="the type of the ticket, default is Task.")
-parser.add_argument("--reporter", type=str, help="input: your user id in JIRA, will list all your open reported tickets.")
-parser.add_argument("--assignee", type=str, help="input: your user id in JIRA, list open issues by reporter.")
+@click.command()
+@click.option('--config', is_flag=True, 
+            help='Start configuration, required for usage.')
+@click.option('--create', is_flag=True, 
+            help='Create ticket in default project.')
+def cli(config, create):
+    if config:
+        start_config()
+    elif config == False:
+        try:
+            with open('jira_config.json') as json_file:
+                config = json.load(json_file)
+                #config = read_jira_config() 
+                for p in config['config']:
+                    server_url = p['server_url']
+                    project = p['default_project']
+                    username = p['default_user']
+                password = get_keyring(username)
+        except FileNotFoundError:
+            print("No config file found, please run myJira.py --config")
+        else:
+            if create:
+                create_ticket(server_url, project, username, password)
+        
 
-args = parser.parse_args()
+def start_config():
+    click.echo('Password credentials saved in windows credential manager.')
+    username = input('user: ')
+    password = getpass.getpass("password: ")
+    jira_url = input('jira url: ')
+    project_key = input('Project key: ')
+    set_keyring(username, password)
 
-if args.title:
+    jira_config_write(jira_url, project_key, username)
+
+
+def set_keyring(username, password):
+    keyring.set_password("jira-api", username, password)
+
+
+def get_keyring(username):
+    password = keyring.get_password("jira-api", username)
+    return password
+
+
+def jira_config_write(server, project, username):
+    jira_config = {}
+    jira_config['config'] = []
+    jira_config['config'].append({
+        'server_url': server,
+        'default_project': project,
+        'default_user': username,
+    })
+
+    with open('jira_config.json', 'w') as outfile:
+        json.dump(jira_config, outfile)
+
+def create_ticket(server, project, username, password):
+    
+    title = input('Title: ')
+    description = input('Description: ')
+    label = input('Label: ')
+    task_type = 'Task'
+
+    jira = JIRA(server=(server), basic_auth=(username, password))
     issue_dict = {
         'project': {'key': project},
-        'summary': args.title,
-        'description': args.description,
-        'issuetype': {'name': args.type},
+        'summary': title,
+        'description': description,
+        'issuetype': {'name': task_type},
     }
-    #create ticket.
     issue = jira.create_issue(fields=issue_dict)
-    #Append OCELOT label to ticket.
     issue.fields.labels.append(label)
     issue.update(fields={"labels": issue.fields.labels})
-elif args.reporter:
-    for issue in jira.search_issues('reporter = ' + args.reporter + ' and STATUS IN ("New", "Open", "Approved", "Planned", "In Progress") order by created desc', maxResults=50):
-        print('{}: {}'.format(issue.key, issue.fields.summary))
-elif args.assignee:
-    for issue in jira.search_issues('assignee = ' + args.assignee + ' and STATUS IN ("New", "Open", "Approved", "Planned", "In Progress") order by created desc', maxResults=50):
-        print('{}: {}'.format(issue.key, issue.fields.summary))
 
 
+if __name__ == '__main__':
+    cli()
