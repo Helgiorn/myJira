@@ -2,8 +2,7 @@ import click
 import keyring
 import getpass
 import json
-from JIRA import jira
-
+from jira import JIRA
 
 @click.command()
 @click.option('--config', is_flag=True, 
